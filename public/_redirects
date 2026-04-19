@@ -1,3 +1,0 @@
-# React SPA - tüm route'ları index.html'e yönlendir
-# Bu olmadan /watch/1/1 gibi derin bağlantılar 404 verir
-/*    /index.html   200
