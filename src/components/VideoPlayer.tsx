@@ -117,6 +117,7 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
     skippedIntroRef.current = false;
 
     const videoUrl = getVideoUrl(episode);
+    console.log("🎬 Oynatılmaya çalışılan video URL:", videoUrl);
     const savedProgress = getProgress(episode.id);
     const startTime = savedProgress && !savedProgress.completed ? savedProgress.currentTime : 0;
 
