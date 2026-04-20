@@ -132,10 +132,12 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
       preload: 'auto',
       playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
       html5: {
-        vhs: { overrideNative: false },
+        vhs: { 
+          overrideNative: true // Safari'nin kendi HLS/MP4 motorunu kullanmasına izin ver
+        },
         nativeVideoTracks: true,
         nativeAudioTracks: true,
-        nativeTextTracks: false, 
+        nativeTextTracks: true, 
       },
       sources: [{ src: videoUrl, type: 'video/mp4' }],
       ...(mini && {
