@@ -125,6 +125,7 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
       autoplay: true,
       controls: true,
       playsinline: true,
+      crossorigin: 'anonymous', // Safari CORS sorunları için kritik
       responsive: true,
       fluid: false,
       fill: true,
@@ -134,9 +135,9 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
         vhs: { overrideNative: false },
         nativeVideoTracks: true,
         nativeAudioTracks: true,
-        nativeTextTracks: false, // Video.js'e tam kontrol ver, tarayıcı kendi kafasına göre track açmasın
+        nativeTextTracks: false, 
       },
-      sources: [{ src: videoUrl }],
+      sources: [{ src: videoUrl, type: 'video/mp4' }],
       ...(mini && {
         controlBar: {
           pictureInPictureToggle: false,
