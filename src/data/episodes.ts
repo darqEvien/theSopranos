@@ -224,12 +224,15 @@ export function getVideoUrl(episode: Episode): string {
   const ss = String(episode.season).padStart(2, '0');
   const ee = String(episode.episode).padStart(2, '0');
   const baseName = `The Sopranos (1999) - S${ss}E${ee} - ${episode.title} (1080p BluRay x265 ImE)`;
+  
+  const seasonFolder = `Season ${episode.season}`;
+  const fileName = `${baseName}.mp4`;
+
   if (R2_BASE) {
-    // R2: /Season 1/The Sopranos (1999) - S01E01 - ... .mp4
-    return `${R2_BASE}/Season ${episode.season}/${baseName}.mp4`;
+    // URL'deki boşlukları ve özel karakterleri güvenli hale getiriyoruz
+    return `${R2_BASE}/${encodeURIComponent(seasonFolder)}/${encodeURIComponent(fileName)}`;
   }
-  // Yerel geliştirme fallback
-  return `/videos/Season ${episode.season}/${baseName}.mp4`;
+  return `/videos/${seasonFolder}/${fileName}`;
 }
 
 export function getSubtitleUrl(episode: Episode, lang: 'tr' | 'en' = 'tr'): string {
@@ -237,11 +240,14 @@ export function getSubtitleUrl(episode: Episode, lang: 'tr' | 'en' = 'tr'): stri
   const ee = String(episode.episode).padStart(2, '0');
   const baseName = `The Sopranos (1999) - S${ss}E${ee} - ${episode.title} (1080p BluRay x265 ImE)`;
   const ext = lang === 'en' ? '.en.srt' : '.srt';
+  
+  const seasonFolder = `Season ${episode.season}`;
+  const fileName = `${baseName}${ext}`;
+
   if (R2_BASE) {
-    return `${R2_BASE}/Season ${episode.season}/${baseName}${ext}`;
+    return `${R2_BASE}/${encodeURIComponent(seasonFolder)}/${encodeURIComponent(fileName)}`;
   }
-  // Yerel geliştirme fallback
-  return `/videos/Season ${episode.season}/${baseName}${ext}`;
+  return `/videos/${seasonFolder}/${fileName}`;
 }
 
 export const totalEpisodes = seasons.reduce((sum, s) => sum + s.episodeCount, 0);

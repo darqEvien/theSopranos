@@ -8,6 +8,9 @@
 }
 
 @layer base {
+  html, body {
+    background-color: #000000;
+  }
   body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
