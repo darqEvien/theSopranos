@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { db } from '../lib/firebase';
-import { collection, query, where, orderBy, limit, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, setDoc, collectionGroup } from 'firebase/firestore';
 import { useStore } from '../store/useStore';
 
 export interface Comment {
@@ -23,7 +23,7 @@ export function useComments(episodeId: string) {
     if (!episodeId) return;
 
     const q = query(
-      collection(db, 'comments'),
+      collectionGroup(db, 'comments'),
       where('episodeId', '==', episodeId),
       orderBy('createdAt', 'desc'),
       limit(50)
@@ -50,10 +50,10 @@ export function useComments(episodeId: string) {
     return () => unsubscribe();
   }, [episodeId]);
 
-  // Düzenleme Fonksiyonu
   const updateComment = useCallback(async (commentId: string, newText: string, newRating: number) => {
+    if (!user) return;
     try {
-      const commentRef = doc(db, 'comments', commentId);
+      const commentRef = doc(db, 'users', user.uid, 'comments', commentId);
       await setDoc(commentRef, {
         text: newText.trim(),
         rating: newRating,
@@ -63,12 +63,13 @@ export function useComments(episodeId: string) {
       console.error("Güncelleme hatası:", error);
       throw error;
     }
-  }, []);
+  }, [user]);
   const addComment = useCallback(async (text: string, rating: number) => {
     if (!user) throw new Error("Giriş yapmalısın.");
 
     try {
-      await addDoc(collection(db, 'comments'), {
+      const commentsCol = collection(db, 'users', user.uid, 'comments');
+      await addDoc(commentsCol, {
         episodeId: episodeId, // Her zaman string olarak kaydet
         userId: user.uid,
         userName: user.displayName || user.email?.split('@')[0],
@@ -82,13 +83,14 @@ export function useComments(episodeId: string) {
     }
   }, [episodeId, user]);
   const deleteComment = useCallback(async (commentId: string) => {
+    if (!user) return;
     try {
-      await deleteDoc(doc(db, 'comments', commentId));
+      await deleteDoc(doc(db, 'users', user.uid, 'comments', commentId));
     } catch (error) {
       console.error("Yorum silme hatası:", error);
       throw error;
     }
-  }, []);
+  }, [user]);
 
   return {
     comments,

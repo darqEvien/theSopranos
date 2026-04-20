@@ -12,15 +12,15 @@ interface StoreState {
   setTheme: (theme: 'dark' | 'light') => void;
   toggleTheme: () => void;
   setUser: (user: User | null) => void; // Profil güncellemesi sonrası anlık refresh için
-  setSubtitleLanguage: (lang: 'tr' | 'en') => void;
-  subtitleLanguage: 'tr' | 'en';
+  setSubtitleLanguage: (lang: 'tr' | 'en' | 'off') => void;
+  subtitleLanguage: 'tr' | 'en' | 'off';
 }
 
 export const useStore = create<StoreState>((set, get) => ({
   user: null,
   authLoading: true,
   theme: 'dark',
-  subtitleLanguage: (localStorage.getItem('subtitleLanguage') as 'tr' | 'en') || 'tr',
+  subtitleLanguage: (localStorage.getItem('subtitleLanguage') as 'tr' | 'en' | 'off') || 'off',
 
   setTheme: (theme) => set({ theme }),
   toggleTheme: () => set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
@@ -51,7 +51,7 @@ onAuthStateChanged(auth, async (user) => {
       const userRef = doc(db, 'users', user.uid);
       const userSnap = await getDoc(userRef);
       if (userSnap.exists() && userSnap.data().subtitleLanguage) {
-        const lang = userSnap.data().subtitleLanguage as 'tr' | 'en';
+        const lang = userSnap.data().subtitleLanguage as 'tr' | 'en' | 'off';
         localStorage.setItem('subtitleLanguage', lang);
         useStore.setState({ subtitleLanguage: lang });
       }

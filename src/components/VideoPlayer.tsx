@@ -42,13 +42,13 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
 
   const nextEpisode = getNextEpisode(episode.season, episode.episode);
 
-  const handleSaveProgress = useCallback(() => {
+  const handleSaveProgress = useCallback((forceCompleted?: boolean) => {
     const player = playerRef.current;
     if (!player || player.isDisposed() || !user) return;
     const currentTime = player.currentTime() || 0;
     const duration = player.duration() || 0;
     if (currentTime > 5 && duration > 0) {
-      saveProgress(episode.id, episode.season, episode.episode, currentTime, duration);
+      saveProgress(episode.id, episode.season, episode.episode, currentTime, duration, forceCompleted);
     }
   }, [episode, user, saveProgress]);
 
@@ -117,7 +117,7 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
     skippedIntroRef.current = false;
 
     const videoUrl = getVideoUrl(episode);
-    console.log("🎬 Oynatılmaya çalışılan video URL:", videoUrl);
+
     const savedProgress = getProgress(episode.id);
     const startTime = savedProgress && !savedProgress.completed ? savedProgress.currentTime : 0;
 
@@ -180,7 +180,7 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
           const blocks = parseSrt(srtText);
           const detectedIntro = detectIntroGap(blocks);
           if (detectedIntro) {
-            console.log(`Dinamik Intro Bulundu: ${detectedIntro.start}s - ${detectedIntro.end}s`);
+
             setDynamicIntro(detectedIntro);
           }
         }
@@ -216,7 +216,6 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
 
       // Kullanıcının store'daki tercihine göre SADECE bir tanesini aç
       const preferredLang = useStore.getState().subtitleLanguage;
-      console.log(`[Subtitle] Tercih edilen dil: ${preferredLang}`);
 
       for (let i = 0; i < textTracks.length; i++) {
         const t = (textTracks as any)[i];
@@ -249,6 +248,9 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
               t.mode = 'disabled';
             }
           }
+        } else {
+          // Eğer hiçbiri 'showing' değilse, kullanıcı kapatmış demektir
+          useStore.getState().setSubtitleLanguage('off');
         }
       };
 
@@ -346,6 +348,7 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
           nextEpisodeTriggeredRef.current = true;
           setShowNextEpisode(true);
           setCountdown(5);
+          handleSaveProgress(true); // Forced completed!
         }
       } else if (currentTime < activeOutro) {
         if (nextEpisodeTriggeredRef.current) {

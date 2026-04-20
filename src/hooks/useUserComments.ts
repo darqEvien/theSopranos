@@ -17,8 +17,7 @@ export function useUserComments() {
     }
 
     const q = query(
-      collection(db, 'comments'),
-      where('userId', '==', user.uid),
+      collection(db, 'users', user.uid, 'comments'),
       orderBy('createdAt', 'desc')
     );
 
@@ -39,7 +38,7 @@ export function useUserComments() {
 
   const removeComment = useCallback(async (commentId: string) => {
     try {
-      await deleteDoc(doc(db, 'comments', commentId));
+      await deleteDoc(doc(db, 'users', user.uid, 'comments', commentId));
     } catch (error) {
       console.error("Yorum silme hatası:", error);
       throw error;
@@ -48,7 +47,7 @@ export function useUserComments() {
 
   const editComment = useCallback(async (commentId: string, newText: string, newRating: number) => {
     try {
-      await updateDoc(doc(db, 'comments', commentId), {
+      await updateDoc(doc(db, 'users', user.uid, 'comments', commentId), {
         text: newText.trim(),
         rating: newRating
       });

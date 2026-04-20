@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
 import { updateProfile } from 'firebase/auth';
-import { doc, setDoc, collection, query, where, limit, onSnapshot, getDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, limit, onSnapshot, getDoc, deleteDoc, getDocs, collectionGroup } from 'firebase/firestore';
 import { useStore } from '../store/useStore';
 import { checkUsernameAvailable, releaseOldUsername } from '../lib/userUtils';
 import { AVATARS } from '../data/avatars';
@@ -130,7 +130,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!targetUid) return;
     const q = query(
-      collection(db, 'comments'),
+      collectionGroup(db, 'comments'),
       where('userId', '==', targetUid),
       limit(50)
     );
@@ -223,14 +223,14 @@ export default function ProfilePage() {
   const handleDeleteComment = async (commentId: string) => {
     if (!window.confirm("Bu yorumu silmek istediğine emin misin?")) return;
     try {
-      await deleteDoc(doc(db, 'comments', commentId));
+      await deleteDoc(doc(db, 'users', targetUid, 'comments', commentId));
     } catch { alert("Silme sırasında hata oluştu."); }
   };
 
   const handleUpdateComment = async (commentId: string) => {
     if (!editText.trim()) return;
     try {
-      await setDoc(doc(db, 'comments', commentId), { text: editText.trim(), rating: editRating }, { merge: true });
+      await setDoc(doc(db, 'users', targetUid, 'comments', commentId), { text: editText.trim(), rating: editRating }, { merge: true });
       setEditingId(null);
     } catch { alert("Güncelleme sırasında hata oluştu."); }
   };

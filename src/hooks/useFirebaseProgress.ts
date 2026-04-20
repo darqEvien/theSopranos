@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useStore } from '../store/useStore';
+import { getNextEpisode, getEpisode } from '../data/episodes';
 
 // ─── Tip ──────────────────────────────────────────────────────────────────────
 export interface WatchProgress {
@@ -99,12 +100,13 @@ export function useFirebaseProgress() {
     season: number,
     episode: number,
     currentTime: number,
-    duration: number
+    duration: number,
+    forceCompleted?: boolean
   ) => {
     if (!user) return;
 
     const percentage = duration > 0 ? (currentTime / duration) * 100 : 0;
-    const completed = percentage >= 90;
+    const completed = forceCompleted || percentage >= 90;
 
     const progressData: WatchProgress = {
       episodeId,
@@ -140,13 +142,35 @@ export function useFirebaseProgress() {
     [allProgress]
   );
 
-  // En son izlenen (tamamlanmamış) bölüm
+  // En son izlenen (tamamlanmamış veya en son bittiyse bir sonraki) bölüm
   const getLastWatched = useCallback((): WatchProgress | null => {
-    const entries = Object.values(allProgress).filter((p) => !p.completed);
-    if (entries.length === 0) return null;
-    return entries.reduce((latest, cur) =>
-      new Date(cur.lastWatched) > new Date(latest.lastWatched) ? cur : latest
+    if (Object.keys(allProgress).length === 0) return null;
+
+    // En son dokunulan bölümü bul
+    const sorted = Object.values(allProgress).sort((a, b) => 
+      new Date(b.lastWatched).getTime() - new Date(a.lastWatched).getTime()
     );
+
+    const latest = sorted[0];
+
+    // Eğer son izlediği bittiyse, bir sonrakini öner
+    if (latest.completed) {
+      const next = getNextEpisode(latest.season, latest.episode);
+      if (next) {
+        return {
+          episodeId: next.id,
+          season: next.season,
+          episode: next.episode,
+          currentTime: 0,
+          duration: 0,
+          percentage: 0,
+          lastWatched: latest.lastWatched,
+          completed: false
+        };
+      }
+    }
+
+    return latest;
   }, [allProgress]);
 
   // Sezon istatistikleri
