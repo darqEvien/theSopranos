@@ -129,15 +129,15 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
       responsive: true,
       fluid: false,
       fill: true,
-      preload: 'auto',
+      preload: 'metadata',
       playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
       html5: {
-        vhs: { 
-          overrideNative: true // Safari'nin kendi HLS/MP4 motorunu kullanmasına izin ver
+        vhs: {
+          overrideNative: !videojs.browser.IS_SAFARI,
         },
-        nativeVideoTracks: true,
-        nativeAudioTracks: true,
-        nativeTextTracks: true, 
+        nativeVideoTracks: videojs.browser.IS_SAFARI,
+        nativeAudioTracks: videojs.browser.IS_SAFARI,
+        nativeTextTracks: videojs.browser.IS_SAFARI,
       },
       sources: [{ src: videoUrl, type: 'video/mp4' }],
       ...(mini && {

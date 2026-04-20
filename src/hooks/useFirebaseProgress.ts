@@ -1,8 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import {
+  collection,
+  doc,
+  getDoc,
+  setDoc,
+  onSnapshot,
+} from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useStore } from '../store/useStore';
 
+// ─── Tip ──────────────────────────────────────────────────────────────────────
 export interface WatchProgress {
   episodeId: string;
   season: number;
@@ -14,14 +21,44 @@ export interface WatchProgress {
   completed: boolean;
 }
 
-// Global olarak tüm ilerlemeleri hafızada da tutabiliriz.
-// Şimdilik performansı artırmak için Zustand veya React Query de kullanabilirdik.
+// ─── Yeni yapı ────────────────────────────────────────────────────────────────
+// users/{uid}/progress/{episodeId}
+// Her bölüm kendi dokümanı — tek büyük doküman yok
+
+// ─── Eski yapıdan yeni yapıya migrasyon (bir kez çalışır) ────────────────────
+async function migrateIfNeeded(uid: string): Promise<void> {
+  try {
+    const oldRef = doc(db, 'user_progress', uid);
+    const oldSnap = await getDoc(oldRef);
+    if (!oldSnap.exists()) return;
+
+    const oldData = oldSnap.data().progress as Record<string, WatchProgress> | undefined;
+    if (!oldData || Object.keys(oldData).length === 0) return;
+
+    // Yeni subcollection'a taşı
+    const progressCol = collection(db, 'users', uid, 'progress');
+    const writes = Object.values(oldData).map((p) =>
+      setDoc(doc(progressCol, p.episodeId), p)
+    );
+    await Promise.all(writes);
+
+    // Eski dokümanı temizle (progress alanını boşalt, silme)
+    await setDoc(oldRef, { progress: {}, migrated: true }, { merge: true });
+
+    console.log(`[Progress] Migrasyon tamamlandı: ${Object.keys(oldData).length} bölüm taşındı.`);
+  } catch (err) {
+    console.error('[Progress] Migrasyon hatası:', err);
+  }
+}
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
 export function useFirebaseProgress() {
   const { user } = useStore();
   const [allProgress, setAllProgress] = useState<Record<string, WatchProgress>>({});
   const [loading, setLoading] = useState(true);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Kullanıcının veritabanı log'unu oku
+  // ── Gerçek zamanlı dinleyici ───────────────────────────────────────────────
   useEffect(() => {
     if (!user) {
       setAllProgress({});
@@ -29,43 +66,42 @@ export function useFirebaseProgress() {
       return;
     }
 
-    const fetchProgress = async () => {
-      setLoading(true);
-      try {
-        const docRef = doc(db, 'user_progress', user.uid);
-        const docSnap: any = await Promise.race([
-          getDoc(docRef),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Firebase bağlantı süresi doldu (AdBlock olabilir)')), 3000)
-          )
-        ]);
-        
-        if (docSnap && docSnap.exists && docSnap.exists()) {
-          setAllProgress(docSnap.data().progress || {});
-        } else if (docSnap && docSnap.exists === false) {
-          // Eğer doküman yoksa boş oluştur (Bağlantı engellenmemişse)
-          setDoc(docRef, { progress: {} }).catch(console.error);
-          setAllProgress({});
+    setLoading(true);
+
+    // Önce migrasyonu kontrol et, sonra dinleyiciyi başlat
+    migrateIfNeeded(user.uid).then(() => {
+      const progressCol = collection(db, 'users', user.uid, 'progress');
+
+      // Gerçek zamanlı dinleyici — herhangi bir değişiklikte otomatik günceller
+      const unsubscribe = onSnapshot(
+        progressCol,
+        (snap) => {
+          const data: Record<string, WatchProgress> = {};
+          snap.forEach((d) => {
+            data[d.id] = d.data() as WatchProgress;
+          });
+          setAllProgress(data);
+          setLoading(false);
+        },
+        (err) => {
+          console.error('[Progress] Dinleyici hatası (AdBlock olabilir):', err);
+          setLoading(false);
         }
-      } catch (err) {
-        console.error("Progress fetch error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+      );
 
-    fetchProgress();
-  }, [user]);
+      return unsubscribe;
+    });
+  }, [user?.uid]);
 
-  // İzleme durumunu Firestore'a kaydet (Debounce mantığı eklenmeli ileride)
-  const saveProgress = async (
+  // ── İlerleme kaydet (debounced) ────────────────────────────────────────────
+  const saveProgress = useCallback((
     episodeId: string,
     season: number,
     episode: number,
     currentTime: number,
     duration: number
   ) => {
-    if (!user) return; // Sadece giriş yapmış kullanıcılar veritabanına yazabilir
+    if (!user) return;
 
     const percentage = duration > 0 ? (currentTime / duration) * 100 : 0;
     const completed = percentage >= 90;
@@ -81,50 +117,54 @@ export function useFirebaseProgress() {
       completed,
     };
 
-    // Hafızayı anında güncelle
+    // UI'ı anında güncelle
     setAllProgress((prev) => ({ ...prev, [episodeId]: progressData }));
 
-    // Firebase'i güncelle (updateDoc yerine setDoc merge: true kullanıyoruz ki doküman yoksa patlamasın)
-    try {
-      const docRef = doc(db, 'user_progress', user.uid);
-      await setDoc(docRef, {
-        progress: {
-          [episodeId]: progressData
-        }
-      }, { merge: true });
-    } catch (err) {
-      console.error("Progress update error:", err);
-    }
-  };
+    // Firebase'e yazmayı debounce et — seek patlamasını önler
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        const episodeRef = doc(db, 'users', user.uid, 'progress', episodeId);
+        await setDoc(episodeRef, progressData);
+      } catch (err) {
+        console.error('[Progress] Kayıt hatası:', err);
+      }
+    }, 3000);
+  }, [user]);
 
-  const getProgress = (episodeId: string) => allProgress[episodeId] || null;
+  // ── Okuma yardımcıları ─────────────────────────────────────────────────────
 
-  const getLastWatched = (): WatchProgress | null => {
-    const entries = Object.values(allProgress);
+  // Tek bölüm ilerlemesi
+  const getProgress = useCallback(
+    (episodeId: string): WatchProgress | null => allProgress[episodeId] ?? null,
+    [allProgress]
+  );
+
+  // En son izlenen (tamamlanmamış) bölüm
+  const getLastWatched = useCallback((): WatchProgress | null => {
+    const entries = Object.values(allProgress).filter((p) => !p.completed);
     if (entries.length === 0) return null;
+    return entries.reduce((latest, cur) =>
+      new Date(cur.lastWatched) > new Date(latest.lastWatched) ? cur : latest
+    );
+  }, [allProgress]);
 
-    return entries.reduce((latest, current) => {
-      return new Date(current.lastWatched) > new Date(latest.lastWatched)
-        ? current
-        : latest;
-    });
-  };
-
-  const getSeasonProgress = (seasonNumber: number) => {
-    const seasonEntries = Object.values(allProgress).filter((p) => p.season === seasonNumber);
-    const completed = seasonEntries.filter((p) => p.completed).length;
-
+  // Sezon istatistikleri
+  const getSeasonProgress = useCallback((seasonNumber: number) => {
     const seasonEpisodeCounts: Record<number, number> = {
       1: 13, 2: 13, 3: 13, 4: 13, 5: 13, 6: 21,
     };
-    const total = seasonEpisodeCounts[seasonNumber] || 13;
+    const total = seasonEpisodeCounts[seasonNumber] ?? 13;
+    const completed = Object.values(allProgress).filter(
+      (p) => p.season === seasonNumber && p.completed
+    ).length;
 
     return {
       watched: completed,
       total,
       percentage: total > 0 ? (completed / total) * 100 : 0,
     };
-  };
+  }, [allProgress]);
 
   return {
     allProgress,
@@ -132,18 +172,15 @@ export function useFirebaseProgress() {
     saveProgress,
     getProgress,
     getLastWatched,
-    getSeasonProgress
+    getSeasonProgress,
   };
 }
 
-// Global format helper
+// ─── Format helper ─────────────────────────────────────────────────────────────
 export function formatTime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
-
-  if (h > 0) {
-    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  }
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   return `${m}:${String(s).padStart(2, '0')}`;
 }

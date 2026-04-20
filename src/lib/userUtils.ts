@@ -1,66 +1,64 @@
 import { db } from '../lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { updateProfile, type User } from 'firebase/auth';
 
-/**
- * Kullanıcı adının benzersizliğini sağlamak için Firestore işlemleri.
- * 'usernames' koleksiyonunda {id: lowercase(username), value: uid} şeklinde tutarız.
- */
-
 // Kullanıcı adı uygunluğunu kontrol et
-export const checkUsernameAvailable = async (username: string): Promise<boolean> => {
+// currentUid verilirse kendi mevcut adını değiştirirken false pozitif vermesin
+export const checkUsernameAvailable = async (
+  username: string,
+  currentUid?: string
+): Promise<boolean> => {
   if (!username || username.trim().length < 3) return false;
   const usernameLower = username.trim().toLowerCase();
 
   try {
-    const docRef = doc(db, 'usernames', usernameLower);
-    const docSnap = await getDoc(docRef);
-    return !docSnap.exists(); // Eğer yoksa uygundur (true)
+    const docSnap = await getDoc(doc(db, 'usernames', usernameLower));
+    if (!docSnap.exists()) return true;
+    // Kendi mevcut adıysa uygun say
+    if (currentUid && docSnap.data().uid === currentUid) return true;
+    return false;
   } catch (error) {
     console.error("Username check error", error);
     return false;
   }
 };
 
-// İlk kayıt veya Google ile girişte tamamlanan profili kaydet
+// İlk kayıt veya Google ile girişte profili tamamla
 export const completeUserProfile = async (
   user: User,
   username: string,
-  photoPath: string | null
+  photoPath: string | null  // null = resimsiz, '/profilePics/xxx.jpg' = avatar
 ): Promise<void> => {
   const usernameLower = username.trim().toLowerCase();
   const cleanUsername = username.trim();
 
-  // 1. Transactionally username'i al (basit metod)
+  const isAvailable = await checkUsernameAvailable(username);
+  if (!isAvailable) throw new Error("Bu kullanıcı adı daha önce alınmış.");
+
+  await updateProfile(user, {
+    displayName: cleanUsername,
+    photoURL: photoPath ?? null,
+  });
+
+  await setDoc(doc(db, 'usernames', usernameLower), {
+    uid: user.uid,
+    original: cleanUsername,
+    createdAt: new Date().toISOString(),
+  });
+
+  await setDoc(doc(db, 'users', user.uid), {
+    username: cleanUsername,
+    email: user.email,
+    photoURL: photoPath ?? null,
+    createdAt: new Date().toISOString(),
+  }, { merge: true });
+};
+
+// Nick değiştirildiğinde eski nick'i usernames'den sil
+export const releaseOldUsername = async (oldUsername: string): Promise<void> => {
   try {
-    const isAvailable = await checkUsernameAvailable(username);
-    if (!isAvailable) {
-      throw new Error("Bu kullanıcı adı daha önce alınmış.");
-    }
-
-    // Auth'u güncelle
-    await updateProfile(user, {
-      displayName: cleanUsername,
-      photoURL: photoPath || 'default'
-    });
-
-    // Username mapping'i rezerve et
-    await setDoc(doc(db, 'usernames', usernameLower), {
-      uid: user.uid,
-      original: cleanUsername,
-      createdAt: new Date().toISOString()
-    });
-
-    // Kullanıcı detaylarını sakla
-    await setDoc(doc(db, 'users', user.uid), {
-      username: cleanUsername,
-      email: user.email,
-      photoURL: photoPath || 'default',
-      createdAt: new Date().toISOString()
-    }, { merge: true });
-
+    await deleteDoc(doc(db, 'usernames', oldUsername.trim().toLowerCase()));
   } catch (error) {
-    console.error("Profil tamamlama hatası:", error);
-    throw error;
+    console.error("Eski username silinemedi:", error);
   }
 };
