@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { auth, db } from '../lib/firebase';
 import {
   signInWithEmailAndPassword,
@@ -20,19 +20,25 @@ export default function AuthPage() {
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
-
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
   const [requireProfileCompletion, setRequireProfileCompletion] = useState(false);
   const [tempGoogleUser, setTempGoogleUser] = useState<any>(null);
+
+  // Google popup açıkken onAuthStateChanged erken navigate etmesin
+  const googleFlowActive = useRef(false);
 
   const navigate = useNavigate();
   const { user } = useStore();
 
+  // Sayfa ilk yüklendiğinde zaten giriş yapmış kullanıcıyı yönlendir
+  // Google flow sırasında bu çalışmasın — her flow kendi navigate'ini yapıyor
   useEffect(() => {
-    if (user && !requireProfileCompletion) navigate('/');
-  }, [user, requireProfileCompletion, navigate]);
+    if (!user || googleFlowActive.current) return;
+    getDoc(doc(db, 'users', user.uid)).then((snap) => {
+      if (snap.exists() && snap.data()?.username) navigate('/');
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Nick uygunluk kontrolü — 500ms debounce
   useEffect(() => {
@@ -56,12 +62,14 @@ export default function AuthPage() {
     try {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
+        navigate('/');
       } else {
         if (!username || username.trim().length < 3) throw new Error("Kullanıcı adı en az 3 karakter olmalı.");
         if (!usernameAvailable) throw new Error("Bu kullanıcı adı başkası tarafından alınmış!");
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         const photoPath = selectedAvatar ? `/profilePics/${selectedAvatar}` : null;
         await completeUserProfile(cred.user, username, photoPath);
+        navigate('/');
       }
     } catch (err: any) {
       setError(err.message || 'Bir hata oluştu.');
@@ -73,19 +81,21 @@ export default function AuthPage() {
   const handleGoogleSignIn = async () => {
     setError('');
     setIsLoading(true);
+    googleFlowActive.current = true; // useEffect navigate etmesin
     try {
       const provider = new GoogleAuthProvider();
       const cred = await signInWithPopup(auth, provider);
       const docSnap = await getDoc(doc(db, 'users', cred.user.uid));
 
-      // Profil tamamlanmamışsa her zaman profil ekranına gönder
-      if (!docSnap.exists() || !docSnap.data()?.username) {
+      if (docSnap.exists() && docSnap.data()?.username) {
+        navigate('/');
+      } else {
         setTempGoogleUser(cred.user);
         setRequireProfileCompletion(true);
       }
-      // Tamamlanmışsa useEffect navigate eder
     } catch (err: any) {
       setError(err.message || 'Google girişi başarısız.');
+      googleFlowActive.current = false;
     } finally {
       setIsLoading(false);
     }
@@ -100,7 +110,6 @@ export default function AuthPage() {
       if (!usernameAvailable) throw new Error("Bu kullanıcı adı başkası tarafından alınmış!");
       const photoPath = selectedAvatar ? `/profilePics/${selectedAvatar}` : null;
       await completeUserProfile(tempGoogleUser, username, photoPath);
-      setRequireProfileCompletion(false);
       navigate('/');
     } catch (err: any) {
       setError(err.message || "Profil güncellenemedi.");
@@ -111,7 +120,6 @@ export default function AuthPage() {
 
   const toggleAvatar = (av: string) => setSelectedAvatar(prev => prev === av ? null : av);
 
-  // Nick input için renk/mesaj
   const getUsernameStatus = () => {
     if (!username || username.trim().length < 3) return null;
     if (checkingUsername) return { color: 'text-gray-400', msg: 'Kontrol ediliyor...' };
@@ -121,7 +129,6 @@ export default function AuthPage() {
   };
   const status = getUsernameStatus();
 
-  // Avatar seçici — kayıt ve profil tamamlama için ortak
   const AvatarPicker = () => (
     <div>
       <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">
@@ -130,15 +137,11 @@ export default function AuthPage() {
       <p className="text-[11px] text-gray-600 ml-1 mb-2">Sonradan profil ayarlarından değiştirebilirsin.</p>
       <div className="flex gap-3 overflow-x-auto pb-4 pt-1 snap-x custom-scrollbar">
         {AVATARS.map((av) => (
-          <button
-            key={av}
-            type="button"
-            onClick={() => toggleAvatar(av)}
+          <button key={av} type="button" onClick={() => toggleAvatar(av)}
             className={`relative shrink-0 snap-center rounded-full overflow-hidden w-16 h-16 border-2 transition-all ${selectedAvatar === av
                 ? 'border-red-500 scale-110 shadow-lg shadow-red-900/30'
                 : 'border-transparent hover:border-white/30 filter grayscale hover:grayscale-0'
-              }`}
-          >
+              }`}>
             <img src={`/profilePics/${av}`} alt="Avatar" className="w-full h-full object-cover" />
           </button>
         ))}
@@ -148,8 +151,6 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-[#050505] text-white relative px-4 py-8 overflow-y-auto font-sans">
-
-      {/* Cinematic Background */}
       <div className="fixed inset-0 z-0">
         <div className="absolute top-0 right-0 w-3/4 h-full bg-[radial-gradient(ellipse_at_top_right,_rgba(153,27,27,0.25)_0%,_transparent_70%)]" />
         <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black via-black/80 to-transparent" />
@@ -157,14 +158,12 @@ export default function AuthPage() {
       </div>
 
       <div className="w-full max-w-md z-10 bg-[#111]/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/10 p-8 sm:p-10 animate-fade-in-up my-auto">
-
         <div className="text-center mb-8">
           <h1 className="font-serif text-5xl font-bold text-white mb-2 tracking-tight drop-shadow-md">
             Sopranos<span className="text-red-600">.</span>
           </h1>
           <p className="text-gray-400 text-sm font-medium tracking-wide">
-            {requireProfileCompletion
-              ? "Hoş Geldin. Profilini Tamamla."
+            {requireProfileCompletion ? "Hoş Geldin. Profilini Tamamla."
               : (isLogin ? "Ailene Hoş Geldin" : "Eski Kurallara Yeni Kan")}
           </p>
         </div>
@@ -175,7 +174,6 @@ export default function AuthPage() {
           </div>
         )}
 
-        {/* ── Profil Tamamlama (Google sonrası) ── */}
         {requireProfileCompletion ? (
           <form onSubmit={handleProfileCompletion} className="space-y-6">
             <div>
@@ -185,103 +183,60 @@ export default function AuthPage() {
                 </label>
                 {status && <span className={`text-[11px] font-semibold ${status.color}`}>{status.msg}</span>}
               </div>
-              <input
-                type="text"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+              <input type="text" required value={username} onChange={(e) => setUsername(e.target.value)}
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all font-medium text-sm"
-                placeholder="pauliewalnuts"
-              />
+                placeholder="pauliewalnuts" />
             </div>
-
             <AvatarPicker />
-
-            <button
-              type="submit"
-              disabled={isLoading || !usernameAvailable}
-              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-xl active:scale-[0.98] disabled:opacity-50"
-            >
+            <button type="submit" disabled={isLoading || !usernameAvailable}
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-xl active:scale-[0.98] disabled:opacity-50">
               {isLoading ? 'Kaydediliyor...' : 'Devam Et'}
             </button>
           </form>
-
         ) : (
           <>
             <form onSubmit={handleSubmit} className="space-y-5">
-
-              {/* Kayıt alanları */}
               {!isLogin && (
                 <>
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">
-                        Kullanıcı Adı
-                      </label>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Kullanıcı Adı</label>
                       {status && <span className={`text-[11px] font-semibold ${status.color}`}>{status.msg}</span>}
                     </div>
-                    <input
-                      type="text"
-                      required
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
+                    <input type="text" required value={username} onChange={(e) => setUsername(e.target.value)}
                       className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-gray-600 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all font-medium text-sm"
-                      placeholder="pauliewalnuts"
-                    />
+                      placeholder="pauliewalnuts" />
                   </div>
                   <AvatarPicker />
                 </>
               )}
-
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">E-posta</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-gray-600 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all font-medium text-sm"
-                  placeholder="isim@ornek.com"
-                />
+                  placeholder="isim@ornek.com" />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Şifre</label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-gray-600 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all font-medium text-sm"
-                  placeholder="••••••••"
-                />
+                  placeholder="••••••••" />
               </div>
-
-              <button
-                type="submit"
-                disabled={isLoading || (!isLogin && !usernameAvailable)}
-                className="w-full bg-white text-black hover:bg-gray-200 font-bold py-3.5 rounded-xl transition-all shadow-xl active:scale-[0.98] disabled:opacity-50"
-              >
+              <button type="submit" disabled={isLoading || (!isLogin && !usernameAvailable)}
+                className="w-full bg-white text-black hover:bg-gray-200 font-bold py-3.5 rounded-xl transition-all shadow-xl active:scale-[0.98] disabled:opacity-50">
                 {isLoading ? 'İşleniyor...' : (isLogin ? 'Giriş Yap' : 'Kayıt Ol')}
               </button>
             </form>
 
-            {/* Google */}
             <div className="mt-8">
               <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/10" />
-                </div>
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10" /></div>
                 <div className="relative flex justify-center text-xs font-semibold uppercase tracking-widest">
                   <span className="bg-[#111] px-4 text-gray-500">veya</span>
                 </div>
               </div>
-
-              <button
-                onClick={handleGoogleSignIn}
-                type="button"
-                disabled={isLoading}
-                className="mt-6 w-full bg-[#151515] hover:bg-[#222] border border-white/10 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-3 text-sm disabled:opacity-50"
-              >
+              <button onClick={handleGoogleSignIn} type="button" disabled={isLoading}
+                className="mt-6 w-full bg-[#151515] hover:bg-[#222] border border-white/10 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-3 text-sm disabled:opacity-50">
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
                   <path fill="#4285F4" fillRule="evenodd" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                   <path fill="#34A853" fillRule="evenodd" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -295,8 +250,7 @@ export default function AuthPage() {
             <div className="mt-8 text-center">
               <button
                 onClick={() => { setError(''); setSelectedAvatar(null); setUsername(''); setUsernameAvailable(null); setIsLogin(!isLogin); }}
-                className="text-xs font-semibold text-gray-400 hover:text-white transition-colors uppercase tracking-wide"
-              >
+                className="text-xs font-semibold text-gray-400 hover:text-white transition-colors uppercase tracking-wide">
                 {isLogin ? "Hesabın yok mu? Kayıt Ol" : "Zaten hesabın var mı? Giriş Yap"}
               </button>
             </div>
