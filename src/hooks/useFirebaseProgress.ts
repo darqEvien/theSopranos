@@ -8,7 +8,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useStore } from '../store/useStore';
-import { getNextEpisode, getEpisode } from '../data/episodes';
+import { getNextEpisode } from '../data/episodes';
 
 // ─── Tip ──────────────────────────────────────────────────────────────────────
 export interface WatchProgress {

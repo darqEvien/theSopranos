@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import 'vidstack/bundle';
 import { MediaPlayer, MediaProvider, Track, Gesture } from '@vidstack/react';
-import type { MediaPlayerInstance, MediaTimeUpdateEvent, MediaTimeUpdateEventDetail } from '@vidstack/react';
+import type { MediaPlayerInstance, MediaTimeUpdateEventDetail } from '@vidstack/react';
 import { DefaultVideoLayout, defaultLayoutIcons } from '@vidstack/react/player/layouts/default';
 
 import '@vidstack/react/player/styles/default/theme.css';

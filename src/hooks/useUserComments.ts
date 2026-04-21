@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { db } from '../lib/firebase';
-import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { type Comment } from './useComments';
 import { useStore } from '../store/useStore';
 
@@ -37,15 +37,17 @@ export function useUserComments() {
   }, [user]);
 
   const removeComment = useCallback(async (commentId: string) => {
+    if (!user) return;
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'comments', commentId));
     } catch (error) {
       console.error("Yorum silme hatası:", error);
       throw error;
     }
-  }, []);
+  }, [user]);
 
   const editComment = useCallback(async (commentId: string, newText: string, newRating: number) => {
+    if (!user) return;
     try {
       await updateDoc(doc(db, 'users', user.uid, 'comments', commentId), {
         text: newText.trim(),
@@ -55,7 +57,7 @@ export function useUserComments() {
       console.error("Yorum güncelleme hatası:", error);
       throw error;
     }
-  }, []);
+  }, [user]);
 
   return {
     userComments,
