@@ -39,7 +39,7 @@ async function migrateIfNeeded(uid: string): Promise<void> {
     await Promise.all(writes);
 
     await setDoc(oldRef, { progress: {}, migrated: true }, { merge: true });
-    console.log(`[Progress] Migrasyon tamamlandı: ${Object.keys(oldData).length} bölüm taşındı.`);
+
   } catch (err) {
     console.error('[Progress] Migrasyon hatası:', err);
   }
@@ -81,7 +81,7 @@ export function useFirebaseProgress() {
           snap.forEach((d) => {
             data[d.id] = d.data() as WatchProgress;
           });
-          console.log('[Firebase] Progress yüklendi:', Object.keys(data), data);
+
           setAllProgress(data);
           setLoading(false);
         },
