@@ -22,10 +22,6 @@ export interface WatchProgress {
   completed: boolean;
 }
 
-// ─── Yeni yapı ────────────────────────────────────────────────────────────────
-// users/{uid}/progress/{episodeId}
-// Her bölüm kendi dokümanı — tek büyük doküman yok
-
 // ─── Eski yapıdan yeni yapıya migrasyon (bir kez çalışır) ────────────────────
 async function migrateIfNeeded(uid: string): Promise<void> {
   try {
@@ -36,16 +32,13 @@ async function migrateIfNeeded(uid: string): Promise<void> {
     const oldData = oldSnap.data().progress as Record<string, WatchProgress> | undefined;
     if (!oldData || Object.keys(oldData).length === 0) return;
 
-    // Yeni subcollection'a taşı
     const progressCol = collection(db, 'users', uid, 'progress');
     const writes = Object.values(oldData).map((p) =>
       setDoc(doc(progressCol, p.episodeId), p)
     );
     await Promise.all(writes);
 
-    // Eski dokümanı temizle (progress alanını boşalt, silme)
     await setDoc(oldRef, { progress: {}, migrated: true }, { merge: true });
-
     console.log(`[Progress] Migrasyon tamamlandı: ${Object.keys(oldData).length} bölüm taşındı.`);
   } catch (err) {
     console.error('[Progress] Migrasyon hatası:', err);
@@ -54,12 +47,12 @@ async function migrateIfNeeded(uid: string): Promise<void> {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 export function useFirebaseProgress() {
-  const { user } = useStore();
+  const { user, setSubtitleLanguage } = useStore();
   const [allProgress, setAllProgress] = useState<Record<string, WatchProgress>>({});
   const [loading, setLoading] = useState(true);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Gerçek zamanlı dinleyici ───────────────────────────────────────────────
+  // ── Gerçek zamanlı progress dinleyici + altyazı tercihi yükleme ───────────
   useEffect(() => {
     if (!user) {
       setAllProgress({});
@@ -69,11 +62,18 @@ export function useFirebaseProgress() {
 
     setLoading(true);
 
-    // Önce migrasyonu kontrol et, sonra dinleyiciyi başlat
     migrateIfNeeded(user.uid).then(() => {
-      const progressCol = collection(db, 'users', user.uid, 'progress');
+      // Altyazı tercihini Firebase'den yükle, store'a yaz
+      const prefRef = doc(db, 'users', user.uid, 'preferences', 'subtitle');
+      getDoc(prefRef).then((snap) => {
+        if (snap.exists()) {
+          const lang = (snap.data().subtitleLanguage as 'tr' | 'en' | 'off') ?? 'tr';
+          setSubtitleLanguage(lang);
+        }
+      }).catch((err) => console.warn('[Subtitle] Yükleme hatası:', err));
 
-      // Gerçek zamanlı dinleyici — herhangi bir değişiklikte otomatik günceller
+      // Progress dinleyici
+      const progressCol = collection(db, 'users', user.uid, 'progress');
       const unsubscribe = onSnapshot(
         progressCol,
         (snap) => {
@@ -81,6 +81,7 @@ export function useFirebaseProgress() {
           snap.forEach((d) => {
             data[d.id] = d.data() as WatchProgress;
           });
+          console.log('[Firebase] Progress yüklendi:', Object.keys(data), data);
           setAllProgress(data);
           setLoading(false);
         },
@@ -93,6 +94,18 @@ export function useFirebaseProgress() {
       return unsubscribe;
     });
   }, [user?.uid]);
+
+  // ── Altyazı tercihini Firebase'e kaydet ───────────────────────────────────
+  // users/{uid}/preferences/subtitle — sadece dil değiştiğinde çağrılır, debounce yok
+  const saveSubtitleLanguage = useCallback(async (lang: 'tr' | 'en' | 'off') => {
+    if (!user) return;
+    try {
+      const prefRef = doc(db, 'users', user.uid, 'preferences', 'subtitle');
+      await setDoc(prefRef, { subtitleLanguage: lang }, { merge: true });
+    } catch (err) {
+      console.error('[Subtitle] Kayıt hatası:', err);
+    }
+  }, [user]);
 
   // ── İlerleme kaydet (debounced) ────────────────────────────────────────────
   const saveProgress = useCallback((
@@ -135,25 +148,20 @@ export function useFirebaseProgress() {
   }, [user]);
 
   // ── Okuma yardımcıları ─────────────────────────────────────────────────────
-
-  // Tek bölüm ilerlemesi
   const getProgress = useCallback(
     (episodeId: string): WatchProgress | null => allProgress[episodeId] ?? null,
     [allProgress]
   );
 
-  // En son izlenen (tamamlanmamış veya en son bittiyse bir sonraki) bölüm
   const getLastWatched = useCallback((): WatchProgress | null => {
     if (Object.keys(allProgress).length === 0) return null;
 
-    // En son dokunulan bölümü bul
-    const sorted = Object.values(allProgress).sort((a, b) => 
+    const sorted = Object.values(allProgress).sort((a, b) =>
       new Date(b.lastWatched).getTime() - new Date(a.lastWatched).getTime()
     );
 
     const latest = sorted[0];
 
-    // Eğer son izlediği bittiyse, bir sonrakini öner
     if (latest.completed) {
       const next = getNextEpisode(latest.season, latest.episode);
       if (next) {
@@ -173,7 +181,6 @@ export function useFirebaseProgress() {
     return latest;
   }, [allProgress]);
 
-  // Sezon istatistikleri
   const getSeasonProgress = useCallback((seasonNumber: number) => {
     const seasonEpisodeCounts: Record<number, number> = {
       1: 13, 2: 13, 3: 13, 4: 13, 5: 13, 6: 21,
@@ -194,6 +201,7 @@ export function useFirebaseProgress() {
     allProgress,
     loading,
     saveProgress,
+    saveSubtitleLanguage,
     getProgress,
     getLastWatched,
     getSeasonProgress,

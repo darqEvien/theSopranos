@@ -103,7 +103,7 @@ export default function WatchPage() {
     <div className="min-h-screen bg-[#050505] text-white selection:bg-red-600 font-sans">
 
       {/* Üst Navigasyon Barı */}
-      <div className={`${mode === 'sinematik' ? 'absolute top-0 left-0 right-0 z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none' : 'sticky top-0 z-40 bg-[#050505]/90 backdrop-blur-md border-b border-white/5'} p-4 lg:px-8 flex items-center justify-between transition-all`}>
+      <div className={`${mode === 'sinematik' ? 'fixed top-0 left-0 right-0 z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none' : 'sticky top-0 z-40 bg-[#050505]/90 backdrop-blur-md border-b border-white/5'} p-4 lg:px-8 flex items-center justify-between transition-all duration-500`}>
         <div className="pointer-events-auto flex items-center gap-4">
           <button onClick={() => navigate(`/`)} className="bg-black/60 p-2.5 rounded-full border border-white/10 hover:bg-white/20 transition-all shadow-lg">
             <Home size={18} />
@@ -142,13 +142,26 @@ export default function WatchPage() {
       </div>
 
       {/* Ana İçerik Alanı */}
-      <div className={mode === 'sinematik' ? 'w-full h-screen relative -mt-[88px]' : 'max-w-[1700px] mx-auto p-4 lg:p-8 flex flex-col lg:flex-row gap-8'}>
+      <div className={mode === 'sinematik' ? 'w-full h-[calc(100vh-80px)] relative bg-black flex items-center justify-center' : 'max-w-[1700px] mx-auto p-4 lg:p-8 flex flex-col lg:flex-row gap-8 transition-all duration-700'}>
 
-        {/* Sol Taraf: Video + Bilgiler (Normal modda flex-1, Sinematikte full) */}
-        <div className={mode === 'sinematik' ? 'w-full h-full' : 'flex-1 min-w-0'}>
+        {/* Sol Taraf: Video + Bilgiler */}
+        <div className={mode === 'sinematik' ? 'w-full h-full flex items-center justify-center' : 'w-full rounded-2xl ring-1 ring-white/5'}>
           {/* Video Player Kutusu */}
-          <div className={mode === 'sinematik' ? 'w-full h-full bg-black' : 'w-full aspect-video bg-black rounded-2xl overflow-hidden ring-1 ring-white/5 shadow-2xl'}>
-            <VideoPlayer key={episode.id} episode={episode} />
+          <div
+            className={`
+              transition-all duration-700 ease-in-out shadow-2xl
+              ${mode === 'sinematik'
+                ? (isPlaylistOpen
+                  ? 'w-[72%] rounded-[2rem] ring-4 ring-white/5 -translate-x-24'
+                  : 'w-[90%] rounded-[2rem] ring-4 ring-white/5')
+                : 'w-full aspect-video rounded-2xl ring-1 ring-white/5'
+              }
+            `}
+            style={mode === 'sinematik' ? { aspectRatio: '16/9' } : undefined}
+          >
+            <div className={`w-full h-full overflow-hidden ${mode === 'sinematik' ? 'rounded-[2rem]' : 'rounded-2xl'}`}>
+              <VideoPlayer key={episode.id} episode={episode} />
+            </div>
           </div>
 
           {/* Normal Mod: Alt Bilgi ve Yorumlar */}
