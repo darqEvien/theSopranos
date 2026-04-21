@@ -223,8 +223,8 @@ const R2_BASE = (import.meta.env.VITE_R2_BASE_URL as string | undefined)?.replac
 export function getVideoUrl(episode: Episode): string {
   const ss = String(episode.season).padStart(2, '0');
   const ee = String(episode.episode).padStart(2, '0');
-  const seasonFolder = `Season ${episode.season}`;
-  const fileName = `S${ss}E${ee}.mp4`; // ← sadece bu satır
+  const seasonFolder = `S${episode.season}`;
+  const fileName = `S${ss}E${ee}.mp4`;
 
   if (R2_BASE) {
     return `${R2_BASE}/${encodeURIComponent(seasonFolder)}/${fileName}`;
@@ -235,7 +235,7 @@ export function getVideoUrl(episode: Episode): string {
 export function getSubtitleUrl(episode: Episode, lang: 'tr' | 'en' = 'tr'): string {
   const ss = String(episode.season).padStart(2, '0');
   const ee = String(episode.episode).padStart(2, '0');
-  const seasonFolder = `Season ${episode.season}`;
+  const seasonFolder = `S${episode.season}`;
   const fileName = `S${ss}E${ee}${lang === 'en' ? '.en.srt' : '.srt'}`;
 
   if (R2_BASE) {
