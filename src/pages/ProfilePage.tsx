@@ -130,8 +130,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!targetUid) return;
     const q = query(
-      collectionGroup(db, 'comments'),
-      where('userId', '==', targetUid),
+      collection(db, 'users', targetUid, 'comments'),
       limit(50)
     );
     const unsubscribe = onSnapshot(q, (snap) => {
