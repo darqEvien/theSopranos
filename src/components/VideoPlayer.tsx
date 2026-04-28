@@ -28,7 +28,7 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
   const playerRef = useRef<Player | null>(null);
   const saveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigate = useNavigate();
-  const { user } = useStore();
+  const { user, subtitleLanguage } = useStore();
   const { saveProgress, getProgress, loading } = useFirebaseProgress();
 
   const [showSkipIntro, setShowSkipIntro] = useState(false);
@@ -51,6 +51,26 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
       saveProgress(episode.id, episode.season, episode.episode, currentTime, duration, forceCompleted);
     }
   }, [episode, user, saveProgress]);
+
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    const textTracks = player.textTracks();
+    if (!textTracks) return;
+
+    for (let i = 0; i < textTracks.length; i++) {
+      const t = (textTracks as any)[i];
+      if (t.kind !== 'subtitles') continue;
+      
+      const shouldShow = t.language === subtitleLanguage;
+      if (shouldShow && t.mode !== 'showing') {
+        t.mode = 'showing';
+      } else if (!shouldShow && t.mode === 'showing') {
+        t.mode = 'disabled';
+      }
+    }
+  }, [subtitleLanguage]);
+
 
   const goToNextEpisode = useCallback(() => {
     if (nextEpisode) {
@@ -227,7 +247,7 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
       trackChangeListener = () => {
         if (isDisposing) return;
 
-        let activeLang: 'tr' | 'en' | null = null;
+        let activeLang: 'tr' | 'en' | 'off' = 'off';
         for (let i = 0; i < textTracks.length; i++) {
           const t = (textTracks as any)[i];
           if (t.kind === 'subtitles' && t.mode === 'showing') {
@@ -238,9 +258,12 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
           }
         }
 
-        if (activeLang) {
+        const currentStoreLang = useStore.getState().subtitleLanguage;
+        if (activeLang !== currentStoreLang) {
           useStore.getState().setSubtitleLanguage(activeLang);
+        }
 
+        if (activeLang !== 'off') {
           // Diğer tüm altyazıları kapat (güvenlik önlemi)
           for (let i = 0; i < textTracks.length; i++) {
             const t = (textTracks as any)[i];
@@ -248,9 +271,6 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
               t.mode = 'disabled';
             }
           }
-        } else {
-          // Eğer hiçbiri 'showing' değilse, kullanıcı kapatmış demektir
-          useStore.getState().setSubtitleLanguage('off');
         }
       };
 
