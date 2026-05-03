@@ -32,11 +32,11 @@ export default function WatchPage() {
     setSelectedSeasonDrawer(season);
   }, [episode?.id, season]);
 
-  if (!episode) {
-    return <Navigate to="/" />;
-  }
+  if (!episode) return <Navigate to="/" />;
 
-  // Hem Sinematik Çekmecede hem de Normal Yan Menüde kullanılacak ortak Oynatma Listesi Bileşeni
+  // Büyüme/küçülme hızını ve dinamiğini Apple (Dynamic Island) gibi yapmak için özel bezier
+  const springTransition = "all 0.85s cubic-bezier(0.34, 1.56, 0.64, 1)";
+
   const PlaylistContent = ({ isDrawer = false }: { isDrawer?: boolean }) => (
     <div className={`flex flex-col h-full ${!isDrawer && 'bg-[#0a0a0a] rounded-2xl border border-white/5 shadow-xl overflow-hidden'}`}>
       <div className={`p-4 border-b border-white/5 shrink-0 flex flex-col gap-3 ${!isDrawer && 'bg-[#111]/50'}`}>
@@ -58,14 +58,23 @@ export default function WatchPage() {
               <option key={s} value={s}>Sezon {s}</option>
             ))}
           </select>
+
+          {/* Toggle with sliding knob */}
           <button
             onClick={() => setAutoPlayNext(!autoPlayNext)}
-            className={`shrink-0 flex flex-col justify-center items-center h-full px-3 py-1.5 rounded-lg border transition-all ${autoPlayNext ? 'bg-red-900/10 border-red-500/30' : 'bg-[#1a1a1a] border-white/10 hover:border-white/20'}`}
-            title={autoPlayNext ? "Otomatik Geçişi Kapat" : "Otomatik Geçişi Aç"}
+            className={`shrink-0 flex flex-col justify-center items-center px-3 py-1.5 rounded-lg border transition-all duration-300 ${autoPlayNext ? 'bg-red-900/10 border-red-500/30' : 'bg-[#1a1a1a] border-white/10 hover:border-white/20'}`}
           >
-            <span className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${autoPlayNext ? 'text-red-500' : 'text-gray-500'}`}>Oto Geçiş</span>
-            <div className={`w-8 h-4 rounded-full p-0.5 transition-colors relative ${autoPlayNext ? 'bg-red-600' : 'bg-gray-600'}`}>
-              <div className={`w-3 h-3 bg-white rounded-full transition-transform absolute top-0.5 ${autoPlayNext ? 'translate-x-4 left-0.5' : 'translate-x-0 left-0.5'}`} />
+            <span className={`text-[10px] font-bold uppercase tracking-wider mb-1.5 transition-colors duration-300 ${autoPlayNext ? 'text-red-500' : 'text-gray-500'}`}>
+              Oto Geçiş
+            </span>
+            <div className={`relative w-10 h-5 rounded-full transition-colors duration-300 ${autoPlayNext ? 'bg-red-600' : 'bg-gray-700'}`}>
+              <div
+                className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-md"
+                style={{
+                  left: autoPlayNext ? 'calc(100% - 18px)' : '2px',
+                  transition: 'left 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                }}
+              />
             </div>
           </button>
         </div>
@@ -76,7 +85,6 @@ export default function WatchPage() {
           const isCurrent = ep.id === episode.id;
           const epProg = getProgress(ep.id);
           const isCompleted = epProg?.completed;
-
           return (
             <button
               key={ep.id}
@@ -114,12 +122,22 @@ export default function WatchPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white selection:bg-red-600 font-sans">
+    <div className="min-h-screen bg-[#050505] text-white selection:bg-red-600 font-sans overflow-x-hidden">
 
-      {/* Üst Navigasyon Barı */}
-      <div className={`${mode === 'sinematik' ? 'fixed top-0 left-0 right-0 z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none' : 'sticky top-0 z-40 bg-[#050505]/90 backdrop-blur-md border-b border-white/5'} p-4 lg:px-8 flex items-center justify-between transition-all duration-500`}>
+      {/* ── Üst Navigasyon Barı ── */}
+      <div
+        className="fixed top-0 left-0 right-0 z-50 p-4 lg:px-8 flex items-center justify-between"
+        style={{
+          background: mode === 'sinematik'
+            ? 'linear-gradient(to bottom, rgba(0,0,0,0.8), transparent)'
+            : 'rgba(5,5,5,0.9)',
+          backdropFilter: mode === 'sinematik' ? 'none' : 'blur(12px)',
+          borderBottom: mode === 'sinematik' ? 'none' : '1px solid rgba(255,255,255,0.05)',
+          transition: 'all 0.85s ease',
+        }}
+      >
         <div className="pointer-events-auto flex items-center gap-4">
-          <button onClick={() => navigate(`/`)} className="bg-black/60 p-2.5 rounded-full border border-white/10 hover:bg-white/20 transition-all shadow-lg">
+          <button onClick={() => navigate('/')} className="bg-black/60 p-2.5 rounded-full border border-white/10 hover:bg-white/20 transition-all shadow-lg">
             <Home size={18} />
           </button>
           <button onClick={() => navigate(`/season/${season}`)} className="flex items-center gap-2 text-white/70 hover:text-white transition-colors">
@@ -128,121 +146,182 @@ export default function WatchPage() {
           </button>
         </div>
 
-        {mode === 'sinematik' && (
-          <div className="text-center pointer-events-none hidden md:block">
-            <h1 className="font-serif text-xl font-bold tracking-tight text-white drop-shadow-lg">S{String(season).padStart(2, '0')} E{String(epNum).padStart(2, '0')}</h1>
-            <p className="text-xs font-medium text-gray-300">{episode.title}</p>
-          </div>
-        )}
+        <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-center hidden md:block" style={{
+          opacity: mode === 'sinematik' ? 1 : 0,
+          transform: `translate(-50%, ${mode === 'sinematik' ? '0' : '-10px'}) scale(${mode === 'sinematik' ? 1 : 0.95})`,
+          transition: springTransition
+        }}>
+          <h1 className="font-serif text-xl font-bold tracking-tight text-white drop-shadow-lg">S{String(season).padStart(2, '0')} E{String(epNum).padStart(2, '0')}</h1>
+          <p className="text-xs font-medium text-gray-300">{episode.title}</p>
+        </div>
 
         <div className="pointer-events-auto flex items-center gap-3">
-          <button onClick={() => setMode(mode === 'sinematik' ? 'normal' : 'sinematik')} className="bg-black/60 p-2.5 rounded-full border border-white/10 hover:border-red-500/50 hover:bg-white/10 transition-all group" title={mode === 'sinematik' ? 'Normal Mod' : 'Sinematik Mod'}>
-            {mode === 'sinematik' ? <Monitor size={18} className="group-hover:text-red-500" /> : <MonitorOff size={18} className="group-hover:text-red-500" />}
+          <button
+            onClick={() => setMode(mode === 'sinematik' ? 'normal' : 'sinematik')}
+            className="bg-black/60 p-2.5 rounded-full border border-white/10 hover:border-red-500/50 hover:bg-white/10 transition-all group"
+            title={mode === 'sinematik' ? 'Normal Mod' : 'Sinematik Mod'}
+          >
+            {mode === 'sinematik'
+              ? <Monitor size={18} className="group-hover:text-red-500 transition-colors" />
+              : <MonitorOff size={18} className="group-hover:text-red-500 transition-colors" />
+            }
           </button>
 
           {user && (
             <Link to={`/profile/${user.displayName}`} className="bg-black/60 p-2 rounded-full border border-white/10 hover:border-red-500/50 transition-all">
-              {user.photoURL ? <img src={user.photoURL} alt="" className="w-8 h-8 rounded-full object-cover" /> : <div className="w-8 h-8 flex items-center justify-center"><User size={18} className="text-gray-400" /></div>}
+              {user.photoURL
+                ? <img src={user.photoURL} alt="" className="w-8 h-8 rounded-full object-cover" />
+                : <div className="w-8 h-8 flex items-center justify-center"><User size={18} className="text-gray-400" /></div>}
             </Link>
           )}
 
-          {mode === 'sinematik' && (
-            <button onClick={() => setIsPlaylistOpen(!isPlaylistOpen)} className="bg-black/60 px-4 py-2 rounded-full border border-white/10 hover:border-red-500/50 hover:bg-white/10 transition-all flex items-center gap-2 group">
+          <div className="overflow-hidden whitespace-nowrap" style={{
+            width: mode === 'sinematik' ? '120px' : '0px',
+            opacity: mode === 'sinematik' ? 1 : 0,
+            marginLeft: mode === 'sinematik' ? '8px' : '0px',
+            transition: springTransition
+          }}>
+            <button
+              onClick={() => setIsPlaylistOpen(!isPlaylistOpen)}
+              className="bg-black/60 px-4 py-2 rounded-full border border-white/10 hover:border-red-500/50 hover:bg-white/10 transition-all flex items-center gap-2 group w-full"
+            >
               <ListVideo size={18} className="group-hover:text-red-500" />
               <span className="font-bold text-xs uppercase tracking-widest hidden sm:inline">Bölümler</span>
             </button>
-          )}
+          </div>
         </div>
       </div>
 
-      {/* Ana İçerik Alanı */}
-      <div className={mode === 'sinematik' ? 'w-full h-[calc(100vh-80px)] relative bg-black flex items-center justify-center' : 'max-w-[1700px] mx-auto p-4 lg:p-8 flex flex-col lg:flex-row gap-8 transition-all duration-700'}>
-
-        {/* Sol Taraf: Video + Bilgiler */}
-        <div className={mode === 'sinematik' ? 'w-full h-full flex items-center justify-center' : 'w-full rounded-2xl ring-1 ring-white/5'}>
-          {/* Video Player Kutusu */}
-          <div
-            className={`
-              transition-all duration-700 ease-in-out shadow-2xl
-              ${mode === 'sinematik'
-                ? (isPlaylistOpen
-                  ? 'w-[72%] rounded-[2rem] ring-4 ring-white/5 -translate-x-24'
-                  : 'w-[90%] rounded-[2rem] ring-4 ring-white/5')
-                : 'w-full aspect-video rounded-2xl ring-1 ring-white/5'
-              }
-            `}
-            style={mode === 'sinematik' ? { aspectRatio: '16/9' } : undefined}
+      {/* ── BİRLEŞTİRİLMİŞ DİNAMİK ANA İÇERİK ALANI ── */}
+      <div 
+        className="mx-auto flex flex-col lg:flex-row relative"
+        style={{
+          maxWidth: mode === 'sinematik' ? '100%' : '1700px',
+          gap: mode === 'sinematik' ? '0px' : '32px',
+          padding: mode === 'sinematik' ? '0px' : '24px',
+          paddingTop: mode === 'sinematik' ? '0px' : '100px',
+          transition: springTransition
+        }}
+      >
+        
+        {/* SOL TARAF: VİDEO VE BİLGİLER */}
+        <div className="flex-1 flex flex-col w-full min-w-0" style={{ transition: springTransition }}>
+          
+          {/* VİDEO KUTUSU */}
+          <div 
+            className="w-full flex items-center justify-center"
+            style={{
+              minHeight: mode === 'sinematik' ? '100vh' : 'auto',
+              background: mode === 'sinematik' ? '#000' : 'transparent',
+              transition: springTransition
+            }}
           >
-            <div className={`w-full h-full overflow-hidden ${mode === 'sinematik' ? 'rounded-[2rem]' : 'rounded-2xl'}`}>
-              <VideoPlayer key={episode.id} episode={episode} />
+            <div
+              className="overflow-hidden relative origin-center"
+              style={{
+                width: mode === 'sinematik' ? (isPlaylistOpen ? '75%' : '92%') : '100%',
+                borderRadius: mode === 'sinematik' ? (isPlaylistOpen ? '2.5rem' : '1.5rem') : '1rem',
+                transform: mode === 'sinematik' && isPlaylistOpen ? 'translateX(-12vw)' : 'translateX(0)',
+                boxShadow: mode === 'sinematik' ? '0 20px 50px rgba(0,0,0,0.5)' : 'none',
+                border: mode === 'sinematik' ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(255,255,255,0.05)',
+                aspectRatio: '16 / 9',
+                transition: springTransition,
+                willChange: 'width, border-radius, transform'
+              }}
+            >
+              <div className="absolute inset-0 w-full h-full bg-black">
+                <VideoPlayer key={episode.id} episode={episode} />
+              </div>
             </div>
           </div>
 
-          {/* Normal Mod: Alt Bilgi ve Yorumlar */}
-          {mode === 'normal' && (
-            <div className="mt-6">
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-2">
-                <h2 className="font-serif text-3xl font-bold tracking-tight text-white">{episode.title}</h2>
-                <div className="flex items-center gap-2 shrink-0">
-                  {prevEpisode && (
-                    <button onClick={() => navigate(`/watch/${prevEpisode.season}/${prevEpisode.episode}`)} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition-colors border border-white/10 text-sm font-semibold">
-                      <ArrowLeft size={16} /> Önceki Bölüm
-                    </button>
-                  )}
-                  {nextEpisode && (
-                    <button onClick={() => navigate(`/watch/${nextEpisode.season}/${nextEpisode.episode}`)} className="flex items-center gap-2 bg-red-600/80 hover:bg-red-600 px-4 py-2 rounded-lg transition-colors border border-red-500/50 text-white text-sm font-semibold shadow-lg shadow-red-900/20">
-                      Sonraki Bölüm <ArrowRight size={16} />
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-3 mb-6">
-                <span className="bg-white/10 text-white px-3 py-1 rounded-md text-xs font-bold uppercase border border-white/5">S{String(season).padStart(2, '0')} E{String(epNum).padStart(2, '0')}</span>
-                <span className="text-gray-400 text-sm font-medium">{episode.airDate}</span>
-              </div>
-              <p className="text-gray-300 leading-relaxed max-w-4xl mb-12 bg-[#0a0a0a] p-6 rounded-2xl border border-white/5">{episode.description}</p>
-
-              <EpisodeComments episodeId={episode.id} />
-            </div>
-          )}
-        </div>
-
-        {/* Sağ Taraf: Oynatma Listesi (Sadece Normal Modda görünür) */}
-        {mode === 'normal' && (
-          <div className="w-full lg:w-[400px] shrink-0">
-            <PlaylistContent />
-          </div>
-        )}
-      </div>
-
-      {/* Sinematik Mod: Çekmece ve Alt Bilgiler */}
-      {mode === 'sinematik' && (
-        <>
-          <div className={`fixed inset-y-0 right-0 z-[100] w-full sm:w-96 bg-[#0a0a0a]/95 backdrop-blur-3xl border-l border-white/10 shadow-2xl transition-transform duration-500 ease-in-out transform ${isPlaylistOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-            <PlaylistContent isDrawer={true} />
-          </div>
-
-          <div className="max-w-6xl mx-auto px-4 py-16">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-4">
-              <h2 className="font-serif text-4xl font-bold tracking-tight">{episode.title}</h2>
-              <div className="flex items-center gap-3 shrink-0">
+          {/* ORTAK ALT BİLGİ BÖLÜMÜ */}
+          <div
+            className="w-full mx-auto"
+            style={{
+              maxWidth: mode === 'sinematik' ? '1152px' : '100%', // 1152px = max-w-6xl
+              padding: mode === 'sinematik' ? '64px 16px' : '24px 0px 0px 0px',
+              transition: springTransition
+            }}
+          >
+            <div className={`flex flex-col sm:flex-row justify-between gap-4 mb-2 ${mode === 'sinematik' ? 'sm:items-center mb-4' : 'sm:items-start'}`}>
+              <h2 className="font-serif font-bold tracking-tight text-white" style={{
+                fontSize: mode === 'sinematik' ? '2.25rem' : '1.875rem',
+                lineHeight: mode === 'sinematik' ? '2.5rem' : '2.25rem',
+                transition: springTransition
+              }}>
+                {episode.title}
+              </h2>
+              <div className="flex items-center gap-2 shrink-0">
                 {prevEpisode && (
-                  <button onClick={() => navigate(`/watch/${prevEpisode.season}/${prevEpisode.episode}`)} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-5 py-2.5 rounded-lg transition-colors border border-white/10 font-semibold">
-                    <ArrowLeft size={18} /> Önceki Bölüm
+                  <button onClick={() => navigate(`/watch/${prevEpisode.season}/${prevEpisode.episode}`)} className={`flex items-center gap-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/10 font-semibold ${mode === 'sinematik' ? 'px-5 py-2.5' : 'px-4 py-2 text-sm'}`}>
+                    <ArrowLeft size={mode === 'sinematik' ? 18 : 16} /> Önceki Bölüm
                   </button>
                 )}
                 {nextEpisode && (
-                  <button onClick={() => navigate(`/watch/${nextEpisode.season}/${nextEpisode.episode}`)} className="flex items-center gap-2 bg-red-600/80 hover:bg-red-600 px-5 py-2.5 rounded-lg transition-colors border border-red-500/50 text-white font-semibold shadow-lg shadow-red-900/20">
-                    Sonraki Bölüm <ArrowRight size={18} />
+                  <button onClick={() => navigate(`/watch/${nextEpisode.season}/${nextEpisode.episode}`)} className={`flex items-center gap-2 bg-red-600/80 hover:bg-red-600 rounded-lg transition-colors border border-red-500/50 text-white font-semibold shadow-lg shadow-red-900/20 ${mode === 'sinematik' ? 'px-5 py-2.5' : 'px-4 py-2 text-sm'}`}>
+                    Sonraki Bölüm <ArrowRight size={mode === 'sinematik' ? 18 : 16} />
                   </button>
                 )}
               </div>
             </div>
-            <p className="text-gray-300 leading-relaxed text-lg mb-12 max-w-3xl">{episode.description}</p>
+
+            <div className="flex items-center gap-3 overflow-hidden" style={{
+              height: mode === 'sinematik' ? '0px' : '32px',
+              opacity: mode === 'sinematik' ? 0 : 1,
+              marginBottom: mode === 'sinematik' ? '0px' : '24px',
+              transition: springTransition
+            }}>
+              <span className="bg-white/10 text-white px-3 py-1 rounded-md text-xs font-bold uppercase border border-white/5 whitespace-nowrap">
+                S{String(season).padStart(2, '0')} E{String(epNum).padStart(2, '0')}
+              </span>
+              <span className="text-gray-400 text-sm font-medium whitespace-nowrap">{episode.airDate}</span>
+            </div>
+
+            <div style={{
+              maxWidth: mode === 'sinematik' ? '768px' : '896px', // 3xl vs 4xl
+              background: mode === 'sinematik' ? 'transparent' : '#0a0a0a',
+              padding: mode === 'sinematik' ? '0px' : '24px',
+              borderRadius: mode === 'sinematik' ? '0px' : '1rem',
+              border: mode === 'sinematik' ? 'none' : '1px solid rgba(255,255,255,0.05)',
+              marginBottom: '48px',
+              transition: springTransition
+            }}>
+              <p className="text-gray-300 leading-relaxed" style={{
+                fontSize: mode === 'sinematik' ? '1.125rem' : '1rem',
+                transition: springTransition
+              }}>
+                {episode.description}
+              </p>
+            </div>
+
             <EpisodeComments episodeId={episode.id} />
           </div>
-        </>
-      )}
+        </div>
+
+        {/* SAĞ TARAF: OYNATMA LİSTESİ (NORMAL MOD) */}
+        <div className="overflow-hidden shrink-0" style={{
+          width: mode === 'normal' ? '400px' : '0px',
+          opacity: mode === 'normal' ? 1 : 0,
+          transition: springTransition
+        }}>
+          <div className="w-[400px]">
+            <PlaylistContent />
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── Sinematik Mod: Sağ Çekmece ── */}
+      <div 
+        className="fixed inset-y-0 right-0 z-[100] w-full sm:w-96 bg-[#0a0a0a]/95 backdrop-blur-3xl border-l border-white/10 shadow-2xl"
+        style={{
+          transform: mode === 'sinematik' && isPlaylistOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: springTransition
+        }}
+      >
+        <PlaylistContent isDrawer={true} />
+      </div>
 
     </div>
   );
