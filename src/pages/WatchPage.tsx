@@ -1,8 +1,8 @@
 import { useParams, Navigate, useNavigate } from 'react-router-dom';
-import { getEpisode, getSeasonByNumber } from '../data/episodes';
+import { getEpisode, getSeasonByNumber, getNextEpisode, getPreviousEpisode } from '../data/episodes';
 import VideoPlayer from '../components/VideoPlayer';
 import { useFirebaseProgress } from '../hooks/useFirebaseProgress';
-import { ArrowLeft, ListVideo, Home, X, PlayCircle, CheckCircle, Monitor, MonitorOff, User } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ListVideo, Home, X, PlayCircle, CheckCircle, Monitor, MonitorOff, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { Link } from 'react-router-dom';
@@ -16,9 +16,11 @@ export default function WatchPage() {
   const epNum = parseInt(episodeNumber || '1', 10);
 
   const episode = getEpisode(season, epNum);
+  const nextEpisode = getNextEpisode(season, epNum);
+  const prevEpisode = getPreviousEpisode(season, epNum);
 
   const { getProgress } = useFirebaseProgress();
-  const { user } = useStore();
+  const { user, autoPlayNext, setAutoPlayNext } = useStore();
 
   const [mode, setMode] = useState<'sinematik' | 'normal'>('normal');
   const [isPlaylistOpen, setIsPlaylistOpen] = useState(false);
@@ -46,15 +48,27 @@ export default function WatchPage() {
             </button>
           </div>
         )}
-        <select
-          value={selectedSeasonDrawer}
-          onChange={(e) => setSelectedSeasonDrawer(parseInt(e.target.value))}
-          className="w-full bg-[#1a1a1a] border border-white/10 text-white text-sm font-bold p-3 rounded-lg outline-none focus:border-red-500 transition-colors appearance-none cursor-pointer"
-        >
-          {[1, 2, 3, 4, 5, 6].map(s => (
-            <option key={s} value={s}>Sezon {s}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-3">
+          <select
+            value={selectedSeasonDrawer}
+            onChange={(e) => setSelectedSeasonDrawer(parseInt(e.target.value))}
+            className="flex-1 bg-[#1a1a1a] border border-white/10 text-white text-sm font-bold p-3 rounded-lg outline-none focus:border-red-500 transition-colors appearance-none cursor-pointer"
+          >
+            {[1, 2, 3, 4, 5, 6].map(s => (
+              <option key={s} value={s}>Sezon {s}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setAutoPlayNext(!autoPlayNext)}
+            className={`shrink-0 flex flex-col justify-center items-center h-full px-3 py-1.5 rounded-lg border transition-all ${autoPlayNext ? 'bg-red-900/10 border-red-500/30' : 'bg-[#1a1a1a] border-white/10 hover:border-white/20'}`}
+            title={autoPlayNext ? "Otomatik Geçişi Kapat" : "Otomatik Geçişi Aç"}
+          >
+            <span className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${autoPlayNext ? 'text-red-500' : 'text-gray-500'}`}>Oto Geçiş</span>
+            <div className={`w-8 h-4 rounded-full p-0.5 transition-colors relative ${autoPlayNext ? 'bg-red-600' : 'bg-gray-600'}`}>
+              <div className={`w-3 h-3 bg-white rounded-full transition-transform absolute top-0.5 ${autoPlayNext ? 'translate-x-4 left-0.5' : 'translate-x-0 left-0.5'}`} />
+            </div>
+          </button>
+        </div>
       </div>
 
       <div className={`flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar ${!isDrawer && 'max-h-[600px]'}`}>
@@ -167,7 +181,21 @@ export default function WatchPage() {
           {/* Normal Mod: Alt Bilgi ve Yorumlar */}
           {mode === 'normal' && (
             <div className="mt-6">
-              <h2 className="font-serif text-3xl font-bold tracking-tight text-white mb-2">{episode.title}</h2>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-2">
+                <h2 className="font-serif text-3xl font-bold tracking-tight text-white">{episode.title}</h2>
+                <div className="flex items-center gap-2 shrink-0">
+                  {prevEpisode && (
+                    <button onClick={() => navigate(`/watch/${prevEpisode.season}/${prevEpisode.episode}`)} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition-colors border border-white/10 text-sm font-semibold">
+                      <ArrowLeft size={16} /> Önceki Bölüm
+                    </button>
+                  )}
+                  {nextEpisode && (
+                    <button onClick={() => navigate(`/watch/${nextEpisode.season}/${nextEpisode.episode}`)} className="flex items-center gap-2 bg-red-600/80 hover:bg-red-600 px-4 py-2 rounded-lg transition-colors border border-red-500/50 text-white text-sm font-semibold shadow-lg shadow-red-900/20">
+                      Sonraki Bölüm <ArrowRight size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
               <div className="flex items-center gap-3 mb-6">
                 <span className="bg-white/10 text-white px-3 py-1 rounded-md text-xs font-bold uppercase border border-white/5">S{String(season).padStart(2, '0')} E{String(epNum).padStart(2, '0')}</span>
                 <span className="text-gray-400 text-sm font-medium">{episode.airDate}</span>
@@ -195,7 +223,21 @@ export default function WatchPage() {
           </div>
 
           <div className="max-w-6xl mx-auto px-4 py-16">
-            <h2 className="font-serif text-4xl font-bold mb-4 tracking-tight">{episode.title}</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-4">
+              <h2 className="font-serif text-4xl font-bold tracking-tight">{episode.title}</h2>
+              <div className="flex items-center gap-3 shrink-0">
+                {prevEpisode && (
+                  <button onClick={() => navigate(`/watch/${prevEpisode.season}/${prevEpisode.episode}`)} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-5 py-2.5 rounded-lg transition-colors border border-white/10 font-semibold">
+                    <ArrowLeft size={18} /> Önceki Bölüm
+                  </button>
+                )}
+                {nextEpisode && (
+                  <button onClick={() => navigate(`/watch/${nextEpisode.season}/${nextEpisode.episode}`)} className="flex items-center gap-2 bg-red-600/80 hover:bg-red-600 px-5 py-2.5 rounded-lg transition-colors border border-red-500/50 text-white font-semibold shadow-lg shadow-red-900/20">
+                    Sonraki Bölüm <ArrowRight size={18} />
+                  </button>
+                )}
+              </div>
+            </div>
             <p className="text-gray-300 leading-relaxed text-lg mb-12 max-w-3xl">{episode.description}</p>
             <EpisodeComments episodeId={episode.id} />
           </div>

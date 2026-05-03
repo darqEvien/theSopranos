@@ -28,7 +28,7 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
   const playerRef = useRef<Player | null>(null);
   const saveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigate = useNavigate();
-  const { user, subtitleLanguage } = useStore();
+  const { user, subtitleLanguage, autoPlayNext, setAutoPlayNext } = useStore();
   const { saveProgress, getProgress, loading } = useFirebaseProgress();
 
   const [showSkipIntro, setShowSkipIntro] = useState(false);
@@ -61,7 +61,7 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
     for (let i = 0; i < textTracks.length; i++) {
       const t = (textTracks as any)[i];
       if (t.kind !== 'subtitles') continue;
-      
+
       const shouldShow = t.language === subtitleLanguage;
       if (shouldShow && t.mode !== 'showing') {
         t.mode = 'showing';
@@ -363,14 +363,14 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
       const parsedOutro = outroTimingObj && outroTimingObj.start !== "00:00" ? timeToSeconds(outroTimingObj.start) : 0;
       const activeOutro = parsedOutro > 0 ? parsedOutro : duration - 60;
 
-      if (duration > 0 && currentTime >= activeOutro && nextEpisode && !isAutoSkipCancelled) {
+      if (autoPlayNext && duration > 0 && currentTime >= activeOutro && nextEpisode && !isAutoSkipCancelled) {
         if (!nextEpisodeTriggeredRef.current) {
           nextEpisodeTriggeredRef.current = true;
           setShowNextEpisode(true);
           setCountdown(5);
           handleSaveProgress(true); // Forced completed!
         }
-      } else if (currentTime < activeOutro) {
+      } else if (currentTime < activeOutro || !autoPlayNext) {
         if (nextEpisodeTriggeredRef.current) {
           nextEpisodeTriggeredRef.current = false;
           setShowNextEpisode(false);
@@ -471,8 +471,10 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
   const showOverlays = !mini;
 
   return (
-    <div className={`relative w-full aspect-video sm:h-full bg-black mx-auto ${mini ? 'vjs-mini-player rounded-full overflow-hidden' : ''}`}>
+    <div className={`group relative w-full aspect-video sm:h-full bg-black mx-auto ${mini ? 'vjs-mini-player rounded-full overflow-hidden' : ''}`}>
       <div ref={videoRef} className="w-full h-full absolute inset-0" />
+
+
 
       {showOverlays && showSkipIntro && playerReady && (
         <button
