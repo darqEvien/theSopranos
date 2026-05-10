@@ -28,7 +28,7 @@ export default function VideoPlayer({ episode, mini = false }: VideoPlayerProps)
   const playerRef = useRef<Player | null>(null);
   const saveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigate = useNavigate();
-  const { user, subtitleLanguage, autoPlayNext, setAutoPlayNext } = useStore();
+  const { user, subtitleLanguage, autoPlayNext } = useStore();
   const { saveProgress, getProgress, loading } = useFirebaseProgress();
 
   const [showSkipIntro, setShowSkipIntro] = useState(false);

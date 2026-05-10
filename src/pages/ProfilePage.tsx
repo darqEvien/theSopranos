@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
 import { updateProfile } from 'firebase/auth';
-import { doc, setDoc, collection, query, where, limit, onSnapshot, getDoc, deleteDoc, getDocs, collectionGroup } from 'firebase/firestore';
+import { doc, setDoc, collection, query, limit, onSnapshot, getDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { useStore } from '../store/useStore';
 import { checkUsernameAvailable, releaseOldUsername } from '../lib/userUtils';
 import { AVATARS } from '../data/avatars';
