@@ -132,6 +132,10 @@ export function useFirebaseProgress() {
       completed,
     };
 
+    // Mevcut giriş varsa ve yeni ilerleme önüne düşerse kaydetme
+    const existing = allProgress[episodeId];
+    if (existing && percentage < 3 && existing.percentage >= percentage) return;
+
     // UI'ı anında güncelle
     setAllProgress((prev) => ({ ...prev, [episodeId]: progressData }));
 
@@ -156,7 +160,9 @@ export function useFirebaseProgress() {
   const getLastWatched = useCallback((): WatchProgress | null => {
     if (Object.keys(allProgress).length === 0) return null;
 
-    const sorted = Object.values(allProgress).sort((a, b) =>
+    const filtered = Object.values(allProgress).filter((p) => p.percentage > 3);
+    if (filtered.length === 0) return null;
+    const sorted = filtered.sort((a, b) =>
       new Date(b.lastWatched).getTime() - new Date(a.lastWatched).getTime()
     );
 
