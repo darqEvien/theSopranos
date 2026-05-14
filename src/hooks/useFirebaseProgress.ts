@@ -132,10 +132,6 @@ export function useFirebaseProgress() {
       completed,
     };
 
-    // Mevcut giriş varsa ve yeni ilerleme önüne düşerse kaydetme
-    const existing = allProgress[episodeId];
-    if (existing && percentage < 3 && existing.percentage >= percentage) return;
-
     // UI'ı anında güncelle
     setAllProgress((prev) => ({ ...prev, [episodeId]: progressData }));
 
@@ -144,6 +140,14 @@ export function useFirebaseProgress() {
     saveTimeoutRef.current = setTimeout(async () => {
       try {
         const episodeRef = doc(db, 'users', user.uid, 'progress', episodeId);
+        const existingSnap = await getDoc(episodeRef);
+
+        // Firestore'daki veriyi karşılaştır — stale allProgress yerine gerçek server data
+        if (existingSnap.exists()) {
+          const existing = existingSnap.data() as WatchProgress;
+          if (existing.percentage >= percentage) return;
+        }
+
         await setDoc(episodeRef, progressData);
       } catch (err) {
         console.error('[Progress] Kayıt hatası:', err);
